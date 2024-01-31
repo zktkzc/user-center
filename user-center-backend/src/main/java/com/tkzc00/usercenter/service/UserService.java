@@ -4,6 +4,7 @@ import com.tkzc00.usercenter.model.domain.User;
 import com.baomidou.mybatisplus.extension.service.IService;
 
 import javax.servlet.http.HttpServletRequest;
+import java.util.List;
 
 /**
  * 用户服务
@@ -40,4 +41,6 @@ public interface UserService extends IService<User> {
     User getSafetyUser(User originUser);
 
     int userLogout(HttpServletRequest request);
+
+    List<User> searchUsersByTags(List<String> tags);
 }
