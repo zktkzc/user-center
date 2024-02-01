@@ -20,5 +20,4 @@ class UserCenterApplicationTests {
         String result = DigestUtils.md5DigestAsHex(("abcd" + "mypassword").getBytes(StandardCharsets.UTF_8));
         System.out.println(result);
     }
-
 }
