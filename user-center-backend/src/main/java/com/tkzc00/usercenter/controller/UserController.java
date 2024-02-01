@@ -10,6 +10,7 @@ import com.tkzc00.usercenter.model.domain.request.UserLoginRequest;
 import com.tkzc00.usercenter.model.domain.request.UserRegisterRequest;
 import com.tkzc00.usercenter.service.UserService;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.util.CollectionUtils;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
@@ -27,6 +28,7 @@ import static com.tkzc00.usercenter.constant.UserConstant.USER_LOGIN_STATE;
  */
 @RestController
 @RequestMapping("/user")
+@CrossOrigin(origins = {"http://localhost:5173"})
 public class UserController {
     @Resource
     private UserService userService;
@@ -112,5 +114,19 @@ public class UserController {
         User user = userService.getById(userId);
         User safetyUser = userService.getSafetyUser(user);
         return ResultUtils.success(safetyUser);
+    }
+
+    /**
+     * 根据标签搜索用户
+     *
+     * @param tagNameList 标签列表
+     * @return 用户列表
+     */
+    @GetMapping("/search/tags")
+    public BaseResponse<List<User>> searchUsersByTags(@RequestParam(required = false) List<String> tagNameList) {
+        if (CollectionUtils.isEmpty(tagNameList))
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为空");
+        List<User> users = userService.searchUsersByTags(tagNameList);
+        return ResultUtils.success(users);
     }
 }
