@@ -1,6 +1,7 @@
 package com.tkzc00.usercenter.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.tkzc00.usercenter.common.BaseResponse;
 import com.tkzc00.usercenter.common.ErrorCode;
 import com.tkzc00.usercenter.common.ResultUtils;
@@ -79,13 +80,10 @@ public class UserController {
     }
 
     @GetMapping("/recommend")
-    public BaseResponse<List<User>> recommendUsers(HttpServletRequest request) {
+    public BaseResponse<Page<User>> recommendUsers(long page, long pageSize, HttpServletRequest request) {
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-        List<User> userList = userService.list(queryWrapper);
-        List<User> safetyUsers = userList.stream()
-                .map(user -> userService.getSafetyUser(user))
-                .collect(Collectors.toList());
-        return ResultUtils.success(safetyUsers);
+        Page<User> userList = userService.page(new Page<>(page, pageSize), queryWrapper);
+        return ResultUtils.success(userList);
     }
 
     @PostMapping("/delete")
