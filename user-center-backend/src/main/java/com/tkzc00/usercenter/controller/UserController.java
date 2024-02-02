@@ -18,7 +18,6 @@ import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static com.tkzc00.usercenter.constant.UserConstant.ADMIN_ROLE;
 import static com.tkzc00.usercenter.constant.UserConstant.USER_LOGIN_STATE;
 
 /**
@@ -28,7 +27,7 @@ import static com.tkzc00.usercenter.constant.UserConstant.USER_LOGIN_STATE;
  */
 @RestController
 @RequestMapping("/user")
-@CrossOrigin(origins = {"http://localhost:5173"})
+@CrossOrigin(origins = {"http://localhost:5173"}, allowCredentials = "true")
 public class UserController {
     @Resource
     private UserService userService;
@@ -67,35 +66,35 @@ public class UserController {
     @GetMapping("/search")
     public BaseResponse<List<User>> searchUsers(String username, HttpServletRequest request) {
         // 仅管理员可查询
-        if (!isAdmin(request)) throw new BusinessException(ErrorCode.NO_AUTH);
+        if (!userService.isAdmin(request)) throw new BusinessException(ErrorCode.NO_AUTH);
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
         if (StringUtils.isNotBlank(username)) {
             queryWrapper.eq("username", username);
         }
         List<User> userList = userService.list(queryWrapper);
-        List<User> safetyUsers = userList.stream().map(user -> userService.getSafetyUser(user)).collect(Collectors.toList());
+        List<User> safetyUsers = userList.stream()
+                .map(user -> userService.getSafetyUser(user))
+                .collect(Collectors.toList());
+        return ResultUtils.success(safetyUsers);
+    }
+
+    @GetMapping("/recommend")
+    public BaseResponse<List<User>> recommendUsers(HttpServletRequest request) {
+        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+        List<User> userList = userService.list(queryWrapper);
+        List<User> safetyUsers = userList.stream()
+                .map(user -> userService.getSafetyUser(user))
+                .collect(Collectors.toList());
         return ResultUtils.success(safetyUsers);
     }
 
     @PostMapping("/delete")
     public BaseResponse<Boolean> deleteUser(@RequestBody long id, HttpServletRequest request) {
         // 仅管理员可查询
-        if (!isAdmin(request)) throw new BusinessException(ErrorCode.NO_AUTH);
+        if (!userService.isAdmin(request)) throw new BusinessException(ErrorCode.NO_AUTH);
         if (id <= 0) throw new BusinessException(ErrorCode.PARAMS_ERROR);
         boolean b = userService.removeById(id);
         return ResultUtils.success(b);
-    }
-
-    /**
-     * 是否为管理员
-     *
-     * @param request 请求
-     * @return 是否为管理员
-     */
-    private static boolean isAdmin(HttpServletRequest request) {
-        Object userObj = request.getSession().getAttribute(USER_LOGIN_STATE);
-        User user = (User) userObj;
-        return user != null && user.getUserRole() == ADMIN_ROLE;
     }
 
     /**
@@ -128,5 +127,14 @@ public class UserController {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为空");
         List<User> users = userService.searchUsersByTags(tagNameList);
         return ResultUtils.success(users);
+    }
+
+    @PostMapping("/update")
+    public BaseResponse<Integer> updateUser(@RequestBody User user, HttpServletRequest request) {
+        // 校验参数是否为空
+        if (user == null) throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为null");
+        User loginUser = userService.getLoginUser(request);
+        int result = userService.updateUser(user, loginUser);
+        return ResultUtils.success(result);
     }
 }

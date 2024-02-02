@@ -24,6 +24,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static com.tkzc00.usercenter.constant.UserConstant.ADMIN_ROLE;
 import static com.tkzc00.usercenter.constant.UserConstant.USER_LOGIN_STATE;
 
 /**
@@ -166,6 +167,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
      */
     @Override
     public int userLogout(HttpServletRequest request) {
+        if (request == null)
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为null");
         // 移除登录态
         request.getSession().removeAttribute(USER_LOGIN_STATE);
         return 1;
@@ -219,5 +222,61 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             }
             return true;
         }).map(this::getSafetyUser).collect(Collectors.toList());
+    }
+
+    /**
+     * 更新用户信息
+     *
+     * @param user      要修改的用户信息
+     * @param loginUser
+     * @return 是否修改成功
+     */
+    @Override
+    public int updateUser(User user, User loginUser) {
+        if (user == null || loginUser == null)
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为null");
+        Long userId = user.getId();
+        if (userId <= 0)
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户id小于等于0");
+        // 如果不是管理员，只允许修改自己的信息
+        // 如果是管理员，允许更新任意用户信息
+        if (!isAdmin(loginUser) && !userId.equals(loginUser.getId()))
+            throw new BusinessException(ErrorCode.NO_AUTH, "非管理员用户只能修改自己的信息");
+        User oldUser = userMapper.selectById(userId);
+        if (oldUser == null)
+            throw new BusinessException(ErrorCode.NULL_ERROR);
+        return userMapper.updateById(user);
+    }
+
+    /**
+     * 获取当前登录的用户信息
+     * @param request 请求
+     * @return 用户信息
+     */
+    @Override
+    public User getLoginUser(HttpServletRequest request) {
+        if (request == null) throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为null");
+        Object userObj = request.getSession().getAttribute(USER_LOGIN_STATE);
+        if (userObj == null) throw new BusinessException(ErrorCode.NOT_LOGIN);
+        return (User) userObj;
+    }
+
+    /**
+     * 判断当前登录用户是否为管理员
+     * @param request 请求
+     * @return 是否为管理员
+     */
+    @Override
+    public boolean isAdmin(HttpServletRequest request) {
+        if (request == null)
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为null");
+        Object userObj = request.getSession().getAttribute(USER_LOGIN_STATE);
+        User user = (User) userObj;
+        return user != null && user.getUserRole() == ADMIN_ROLE;
+    }
+
+    @Override
+    public boolean isAdmin(User loginUser) {
+        return loginUser != null && loginUser.getUserRole() == ADMIN_ROLE;
     }
 }
