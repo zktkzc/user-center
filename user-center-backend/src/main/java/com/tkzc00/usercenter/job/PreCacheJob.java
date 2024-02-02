@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.tkzc00.usercenter.model.domain.User;
 import com.tkzc00.usercenter.service.UserService;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -28,23 +30,35 @@ public class PreCacheJob {
     private RedisTemplate<String, Object> redisTemplate;
     @Resource
     private UserService userService;
+    @Resource
+    private RedissonClient redissonClient;
     private final List<Long> mainUserIds = Arrays.asList(1L, 2L, 3L, 4L, 5L, 6L);
 
     /**
      * 缓存推荐用户，每天执行一次
      */
-    @Scheduled(cron = "0 0 0 * * ?")
+    @Scheduled(cron = "0 0 0 * * *")
     public void preCacheRecommendUser() {
-        for (Long mainUserId : mainUserIds) {
-            String key = String.format("yupao:user:recommend:%s", mainUserId);
-            ValueOperations<String, Object> valueOperations = redisTemplate.opsForValue();
-            QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-            Page<User> userPage = userService.page(new Page<>(1, 20), queryWrapper);
-            try {
-                valueOperations.set(key, userPage, 30, TimeUnit.SECONDS);
-            } catch (Exception e) {
-                log.error("Redis set error: {}", e.getMessage());
+        RLock lock = redissonClient.getLock("yupao:precachejob:docache:lock");
+        try {
+            if (lock.tryLock(0, -1, TimeUnit.MILLISECONDS)) {
+                for (Long mainUserId : mainUserIds) {
+                    String key = String.format("yupao:user:recommend:%s", mainUserId);
+                    ValueOperations<String, Object> valueOperations = redisTemplate.opsForValue();
+                    QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+                    Page<User> userPage = userService.page(new Page<>(1, 20), queryWrapper);
+                    try {
+                        valueOperations.set(key, userPage, 30, TimeUnit.SECONDS);
+                    } catch (Exception e) {
+                        log.error("Redis set error: {}", e.getMessage());
+                    }
+                }
             }
+        } catch (InterruptedException e) {
+            log.error("Get lock error: {}", e.getMessage());
+        } finally {
+            // 只能释放自己的锁
+            if (lock.isHeldByCurrentThread()) lock.unlock();
         }
     }
 }
