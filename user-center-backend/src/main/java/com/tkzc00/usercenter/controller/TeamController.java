@@ -10,6 +10,8 @@ import com.tkzc00.usercenter.model.domain.Team;
 import com.tkzc00.usercenter.model.domain.User;
 import com.tkzc00.usercenter.model.dto.TeamQuery;
 import com.tkzc00.usercenter.model.request.TeamAddRequest;
+import com.tkzc00.usercenter.model.request.TeamJoinRequest;
+import com.tkzc00.usercenter.model.request.TeamUpdateRequest;
 import com.tkzc00.usercenter.model.vo.TeamUserVO;
 import com.tkzc00.usercenter.service.TeamService;
 import com.tkzc00.usercenter.service.UserService;
@@ -56,10 +58,11 @@ public class TeamController {
     }
 
     @PostMapping("/update")
-    public BaseResponse<Boolean> updateTeam(@RequestBody Team team) {
-        if (team == null)
+    public BaseResponse<Boolean> updateTeam(@RequestBody TeamUpdateRequest teamUpdateRequest, HttpServletRequest request) {
+        if (teamUpdateRequest == null)
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为null");
-        boolean result = teamService.updateById(team);
+        User loginUser = userService.getLoginUser(request);
+        boolean result = teamService.updateTeam(teamUpdateRequest, loginUser);
         if (!result)
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "数据库更新操作失败");
         return ResultUtils.success(true);
@@ -96,5 +99,16 @@ public class TeamController {
         if (page == null)
             throw new BusinessException(ErrorCode.NULL_ERROR, "查询失败");
         return ResultUtils.success(page);
+    }
+
+    @PostMapping("/join")
+    public BaseResponse<Boolean> joinTeam(@RequestBody TeamJoinRequest teamJoinRequest, HttpServletRequest request) {
+        if (teamJoinRequest == null)
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为null");
+        User loginUser = userService.getLoginUser(request);
+        boolean result = teamService.joinTeam(teamJoinRequest, loginUser);
+        if (!result)
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "加入队伍失败");
+        return ResultUtils.success(true);
     }
 }
