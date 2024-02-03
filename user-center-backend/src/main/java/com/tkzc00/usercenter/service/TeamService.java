@@ -3,6 +3,10 @@ package com.tkzc00.usercenter.service;
 import com.tkzc00.usercenter.model.domain.Team;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.tkzc00.usercenter.model.domain.User;
+import com.tkzc00.usercenter.model.dto.TeamQuery;
+import com.tkzc00.usercenter.model.vo.TeamUserVO;
+
+import java.util.List;
 
 /**
 * @author tkzc00
@@ -11,4 +15,6 @@ import com.tkzc00.usercenter.model.domain.User;
 */
 public interface TeamService extends IService<Team> {
     long addTeam(Team team, User loginUser);
+
+    List<TeamUserVO> listTeams(TeamQuery teamQuery, boolean isAdmin);
 }

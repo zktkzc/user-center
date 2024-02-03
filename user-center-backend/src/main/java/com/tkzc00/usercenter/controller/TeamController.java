@@ -10,6 +10,7 @@ import com.tkzc00.usercenter.model.domain.Team;
 import com.tkzc00.usercenter.model.domain.User;
 import com.tkzc00.usercenter.model.dto.TeamQuery;
 import com.tkzc00.usercenter.model.request.TeamAddRequest;
+import com.tkzc00.usercenter.model.vo.TeamUserVO;
 import com.tkzc00.usercenter.service.TeamService;
 import com.tkzc00.usercenter.service.UserService;
 import org.springframework.beans.BeanUtils;
@@ -75,20 +76,17 @@ public class TeamController {
     }
 
     @GetMapping("/list")
-    public BaseResponse<List<Team>> listTeams(TeamQuery teamQuery) {
+    public BaseResponse<List<TeamUserVO>> listTeams(@RequestBody TeamQuery teamQuery, HttpServletRequest request) {
         if (teamQuery == null)
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为null");
-        Team team = new Team();
-        BeanUtils.copyProperties(teamQuery, team);
-        QueryWrapper<Team> queryWrapper = new QueryWrapper<>(team);
-        List<Team> list = teamService.list(queryWrapper);
+        List<TeamUserVO> list = teamService.listTeams(teamQuery, userService.isAdmin(request));
         if (list == null)
             throw new BusinessException(ErrorCode.NULL_ERROR, "查询失败");
         return ResultUtils.success(list);
     }
 
     @GetMapping("/list/page")
-    public BaseResponse<Page<Team>> listTeamsByPage(TeamQuery teamQuery) {
+    public BaseResponse<Page<Team>> listTeamsByPage(@RequestBody TeamQuery teamQuery) {
         if (teamQuery == null)
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为null");
         Team team = new Team();

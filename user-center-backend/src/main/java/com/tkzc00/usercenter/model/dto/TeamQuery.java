@@ -2,14 +2,18 @@ package com.tkzc00.usercenter.model.dto;
 
 import com.tkzc00.usercenter.common.PageRequest;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 /**
  * 队伍查询封装类
  *
  * @author tkzc00
  */
+@EqualsAndHashCode(callSuper = true)
 @Data
 public class TeamQuery extends PageRequest {
+    private static final long serialVersionUID = 3393875559886580474L;
+
     /**
      * id
      */
@@ -19,6 +23,11 @@ public class TeamQuery extends PageRequest {
      * 队伍名称
      */
     private String name;
+
+    /**
+     * 搜索关键词，同时对队伍名称和描述进行查询
+     */
+    private String searchText;
 
     /**
      * 描述

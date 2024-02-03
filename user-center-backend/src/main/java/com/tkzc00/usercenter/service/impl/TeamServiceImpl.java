@@ -8,15 +8,22 @@ import com.tkzc00.usercenter.mapper.TeamMapper;
 import com.tkzc00.usercenter.model.domain.Team;
 import com.tkzc00.usercenter.model.domain.User;
 import com.tkzc00.usercenter.model.domain.UserTeam;
+import com.tkzc00.usercenter.model.dto.TeamQuery;
 import com.tkzc00.usercenter.model.enums.TeamStatus;
+import com.tkzc00.usercenter.model.vo.TeamUserVO;
+import com.tkzc00.usercenter.model.vo.UserVO;
 import com.tkzc00.usercenter.service.TeamService;
+import com.tkzc00.usercenter.service.UserService;
 import com.tkzc00.usercenter.service.UserTeamService;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -29,6 +36,8 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
         implements TeamService {
     @Resource
     private UserTeamService userTeamService;
+    @Resource
+    private UserService userService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -76,6 +85,61 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
         if (!result)
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "创建队伍失败");
         return teamId;
+    }
+
+    @Override
+    public List<TeamUserVO> listTeams(TeamQuery teamQuery, boolean isAdmin) {
+        QueryWrapper<Team> queryWrapper = new QueryWrapper<>();
+        if (teamQuery != null) {
+            Long id = teamQuery.getId();
+            if (id != null && id > 0)
+                queryWrapper.eq("id", id);
+            String name = teamQuery.getName();
+            if (StringUtils.isNotBlank(name))
+                queryWrapper.like("name", name);
+            String searchText = teamQuery.getSearchText();
+            if (StringUtils.isNotBlank(searchText))
+                queryWrapper.and(wrapper -> wrapper.like("name", searchText)
+                        .or().like("description", searchText));
+            String description = teamQuery.getDescription();
+            if (StringUtils.isNotBlank(description))
+                queryWrapper.like("description", description);
+            Integer maxNum = teamQuery.getMaxNum();
+            if (maxNum != null && maxNum > 0)
+                queryWrapper.eq("maxNum", maxNum);
+            Long userId = teamQuery.getUserId();
+            if (userId != null && userId > 0)
+                queryWrapper.eq("userId", userId);
+            Integer status = teamQuery.getStatus();
+            TeamStatus teamStatus = TeamStatus.getEnumByValue(status);
+            if (teamStatus == null)
+                teamStatus = TeamStatus.PUBLIC;
+            if (!isAdmin && !teamStatus.equals(TeamStatus.PUBLIC))
+                throw new BusinessException(ErrorCode.NO_AUTH, "无权限查看非公开队伍");
+            queryWrapper.eq("status", teamStatus.getValue());
+        }
+        // 不展示已过期的队伍
+        queryWrapper.and(wrapper -> wrapper.isNull("expireTime").or().gt("expireTime", new Date()));
+        List<Team> teamList = list(queryWrapper);
+        if (teamList == null || teamList.isEmpty())
+            return new ArrayList<>();
+        List<TeamUserVO> teamUserVOList = new ArrayList<>();
+        // 关联查询队伍对应的用户信息
+        for (Team team : teamList) {
+            Long userId = team.getUserId();
+            if (userId == null || userId <= 0)
+                continue;
+            User user = userService.getById(userId);
+            TeamUserVO teamUserVO = new TeamUserVO();
+            BeanUtils.copyProperties(team, teamUserVO);
+            if (user != null) {
+                UserVO userVO = new UserVO();
+                BeanUtils.copyProperties(user, userVO);
+                teamUserVO.setCreateUser(userVO);
+            }
+            teamUserVOList.add(teamUserVO);
+        }
+        return teamUserVOList;
     }
 }
 
