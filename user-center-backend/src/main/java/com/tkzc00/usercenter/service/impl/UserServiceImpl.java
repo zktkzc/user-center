@@ -8,7 +8,9 @@ import com.tkzc00.usercenter.common.ErrorCode;
 import com.tkzc00.usercenter.exception.BusinessException;
 import com.tkzc00.usercenter.mapper.UserMapper;
 import com.tkzc00.usercenter.model.domain.User;
+import com.tkzc00.usercenter.model.vo.UserVO;
 import com.tkzc00.usercenter.service.UserService;
+import com.tkzc00.usercenter.utils.AlgorithmUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
@@ -18,11 +20,11 @@ import org.springframework.util.DigestUtils;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.tkzc00.usercenter.constant.UserConstant.ADMIN_ROLE;
 import static com.tkzc00.usercenter.constant.UserConstant.USER_LOGIN_STATE;
@@ -250,6 +252,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
     /**
      * 获取当前登录的用户信息
+     *
      * @param request 请求
      * @return 用户信息
      */
@@ -263,6 +266,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
     /**
      * 判断当前登录用户是否为管理员
+     *
      * @param request 请求
      * @return 是否为管理员
      */
@@ -275,8 +279,51 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         return user != null && user.getUserRole() == ADMIN_ROLE;
     }
 
+    /**
+     * 判断当前登录用户是否为管理员
+     *
+     * @param loginUser 当前登录用户
+     * @return 是否为管理员
+     */
     @Override
     public boolean isAdmin(User loginUser) {
         return loginUser != null && loginUser.getUserRole() == ADMIN_ROLE;
+    }
+
+    /**
+     * 根据标签的相似度匹配用户
+     *
+     * @param loginUser 当前登录用户
+     * @param num       匹配数量
+     * @return 用户列表
+     */
+    @Override
+    public List<User> matchUsers(User loginUser, long num) {
+        List<User> userList = list();
+        if (CollectionUtils.isEmpty(userList)) {
+            throw new BusinessException(ErrorCode.NULL_ERROR, "用户列表为空");
+        }
+        String loginUserTagsStr = loginUser.getTags();
+        Gson gson = new Gson();
+        List<String> loginUserTags = gson.fromJson(loginUserTagsStr, new TypeToken<List<String>>() {
+        }.getType());
+        SortedMap<Integer, Long> indexDistanceMap = new TreeMap<>();
+        for (int i = 0; i < userList.size(); i++) {
+            User user = userList.get(i);
+            if (user.getId().equals(loginUser.getId())) {
+                break;
+            }
+            String userTagsStr = user.getTags();
+            if (StringUtils.isBlank(userTagsStr))
+                continue;
+            List<String> userTags = gson.fromJson(userTagsStr, new TypeToken<List<String>>() {
+            }.getType());
+            long score = AlgorithmUtils.miniDistanceForTags(loginUserTags, userTags);
+            indexDistanceMap.put(i, score);
+        }
+        List<Integer> indices = indexDistanceMap.keySet().stream().limit(num).collect(Collectors.toList());
+        return indices.stream()
+                .map(index -> getSafetyUser(userList.get(index)))
+                .collect(Collectors.toList());
     }
 }

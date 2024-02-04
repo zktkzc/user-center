@@ -9,6 +9,7 @@ import com.tkzc00.usercenter.exception.BusinessException;
 import com.tkzc00.usercenter.model.domain.User;
 import com.tkzc00.usercenter.model.request.UserLoginRequest;
 import com.tkzc00.usercenter.model.request.UserRegisterRequest;
+import com.tkzc00.usercenter.model.vo.UserVO;
 import com.tkzc00.usercenter.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -154,5 +155,21 @@ public class UserController {
         User loginUser = userService.getLoginUser(request);
         int result = userService.updateUser(user, loginUser);
         return ResultUtils.success(result);
+    }
+
+    /**
+     * 根据标签的相似度匹配用户
+     *
+     * @param request 请求
+     * @param num     匹配数量
+     * @return 用户列表
+     */
+    @GetMapping("/match")
+    public BaseResponse<List<User>> matchUsers(long num, HttpServletRequest request) {
+        if (num <= 0 || num > 20)
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数不合法");
+        User loginUser = userService.getLoginUser(request);
+        List<User> users = userService.matchUsers(loginUser, num);
+        return ResultUtils.success(users);
     }
 }

@@ -2,6 +2,7 @@ package com.tkzc00.usercenter.service;
 
 import com.tkzc00.usercenter.model.domain.User;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.tkzc00.usercenter.model.vo.UserVO;
 
 import javax.servlet.http.HttpServletRequest;
 import java.util.List;
@@ -51,4 +52,6 @@ public interface UserService extends IService<User> {
     boolean isAdmin(HttpServletRequest request);
 
     boolean isAdmin(User loginUser);
+
+    List<User> matchUsers(User loginUser, long num);
 }
