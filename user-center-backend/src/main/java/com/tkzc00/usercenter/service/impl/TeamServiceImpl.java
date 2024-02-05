@@ -19,6 +19,8 @@ import com.tkzc00.usercenter.service.TeamService;
 import com.tkzc00.usercenter.service.UserService;
 import com.tkzc00.usercenter.service.UserTeamService;
 import org.apache.commons.lang3.StringUtils;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author tkzc00
@@ -42,6 +45,8 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
     private UserTeamService userTeamService;
     @Resource
     private UserService userService;
+    @Resource
+    private RedissonClient redissonClient;
 
     /**
      * 添加队伍
@@ -135,8 +140,8 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
             TeamStatus teamStatus = TeamStatus.getEnumByValue(status);
             if (teamStatus == null)
                 teamStatus = TeamStatus.PUBLIC;
-            if (!isAdmin && !teamStatus.equals(TeamStatus.PUBLIC))
-                throw new BusinessException(ErrorCode.NO_AUTH, "无权限查看非公开队伍");
+            if (!isAdmin && teamStatus.equals(TeamStatus.PRIVATE))
+                throw new BusinessException(ErrorCode.NO_AUTH, "无权限查看私有队伍");
             queryWrapper.eq("status", teamStatus.getValue());
         }
         // 不展示已过期的队伍
@@ -225,32 +230,48 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
         }
         // 最多加入5个队伍
         Long userId = loginUser.getId();
-        long count = userTeamService.count(new QueryWrapper<UserTeam>().eq("userId", userId));
-        if (count >= 5)
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户最多加入5个队伍");
-        // 不能加入人数已满的队伍
-        count = getTeamUsersByTeamId(teamId);
-        if (count >= team.getMaxNum())
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "队伍人数已满");
-        // 不能重复加入已加入的队伍
-        count = userTeamService.count(new QueryWrapper<UserTeam>().eq("userId", userId).eq("teamId", teamId));
-        if (count > 0)
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "不能重复加入队伍");
-        UserTeam userTeam = new UserTeam();
-        userTeam.setUserId(userId);
-        userTeam.setTeamId(teamId);
-        userTeam.setJoinTime(new Date());
-        boolean result = userTeamService.save(userTeam);
-        if (!result)
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "加入队伍失败");
-        return true;
+        RLock rLock = redissonClient.getLock("yupao:join_team");
+        try {
+            while (true) {
+                if (rLock.tryLock(0, -1, TimeUnit.MILLISECONDS)) {
+                    // 拿到锁后执行加入队伍操作
+                    long count = userTeamService.count(new QueryWrapper<UserTeam>().eq("userId", userId));
+                    if (count >= 5)
+                        throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户最多加入5个队伍");
+                    // 不能重复加入已加入的队伍
+                    count = userTeamService.count(new QueryWrapper<UserTeam>().eq("userId", userId).eq("teamId", teamId));
+                    if (count > 0)
+                        throw new BusinessException(ErrorCode.PARAMS_ERROR, "不能重复加入队伍");
+                    // 不能加入人数已满的队伍
+                    count = getTeamUsersByTeamId(teamId);
+                    if (count >= team.getMaxNum())
+                        throw new BusinessException(ErrorCode.PARAMS_ERROR, "队伍人数已满");
+                    UserTeam userTeam = new UserTeam();
+                    userTeam.setUserId(userId);
+                    userTeam.setTeamId(teamId);
+                    userTeam.setJoinTime(new Date());
+                    boolean result = userTeamService.save(userTeam);
+                    if (!result)
+                        throw new BusinessException(ErrorCode.SYSTEM_ERROR, "加入队伍失败");
+                    return true;
+                }
+                // 没拿到锁则继续循环拿锁
+            }
+        } catch (InterruptedException e) {
+            log.error("Do joinTeam error", e);
+            return false;
+        } finally {
+            // 只能释放自己加的锁
+            if (rLock.isHeldByCurrentThread())
+                rLock.unlock();
+        }
     }
 
     /**
      * 退出队伍
      *
      * @param teamQuitRequest 退出队伍请求
-     * @param loginUser      登录用户
+     * @param loginUser       登录用户
      * @return 是否退出成功
      */
     @Override
@@ -308,7 +329,8 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
 
     /**
      * 解散队伍
-     * @param id 队伍id
+     *
+     * @param id        队伍id
      * @param loginUser 登录用户
      * @return 是否解散成功
      */
@@ -331,6 +353,7 @@ public class TeamServiceImpl extends ServiceImpl<TeamMapper, Team>
 
     /**
      * 获取队伍的成员数量
+     *
      * @param teamId 队伍id
      * @return 成员数量
      */

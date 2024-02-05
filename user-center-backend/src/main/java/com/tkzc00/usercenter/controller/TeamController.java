@@ -16,13 +16,12 @@ import com.tkzc00.usercenter.service.TeamService;
 import com.tkzc00.usercenter.service.UserService;
 import com.tkzc00.usercenter.service.UserTeamService;
 import org.springframework.beans.BeanUtils;
+import org.springframework.util.CollectionUtils;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -105,6 +104,13 @@ public class TeamController {
             });
         } catch (Exception e) {
         }
+        // 查询加入队伍的用户信息（人数）
+        List<UserTeam> userTeamList = userTeamService.list(new QueryWrapper<UserTeam>().in("teamId", teamIds));
+        Map<Long, List<UserTeam>> teamIdUserTeamList = userTeamList.stream().collect(Collectors.groupingBy(UserTeam::getTeamId));
+        list.forEach(teamUserVO -> {
+            List<UserTeam> userTeams = teamIdUserTeamList.getOrDefault(teamUserVO.getId(), new ArrayList<>());
+            teamUserVO.setMembers(userTeams.size());
+        });
         return ResultUtils.success(list);
     }
 
@@ -115,8 +121,33 @@ public class TeamController {
         User loginUser = userService.getLoginUser(request);
         teamQuery.setUserId(loginUser.getId());
         List<TeamUserVO> list = teamService.listTeams(teamQuery, true);
+        teamQuery.setStatus(1);
+        list.addAll(teamService.listTeams(teamQuery, true));
+        teamQuery.setStatus(2);
+        list.addAll(teamService.listTeams(teamQuery, true));
         if (list == null)
             throw new BusinessException(ErrorCode.NULL_ERROR, "查询失败");
+        // 判断当前用户是否已加入队伍
+        List<Long> teamIds = list.stream().map(TeamUserVO::getId).collect(Collectors.toList());
+        QueryWrapper<UserTeam> userTeamQueryWrapper = new QueryWrapper<>();
+        try {
+            userTeamQueryWrapper.eq("userId", loginUser.getId());
+            userTeamQueryWrapper.in("teamId", teamIds);
+            List<UserTeam> userTeamList = userTeamService.list(userTeamQueryWrapper);
+            Set<Long> joinedTeamIdSet = userTeamList.stream().map(UserTeam::getTeamId).collect(Collectors.toSet());
+            list.forEach(teamUserVO -> {
+                if (joinedTeamIdSet.contains(teamUserVO.getId()))
+                    teamUserVO.setHasJoin(true);
+            });
+        } catch (Exception e) {
+        }
+        // 查询加入队伍的用户信息（人数）
+        List<UserTeam> userTeamList = userTeamService.list(new QueryWrapper<UserTeam>().in("teamId", teamIds));
+        Map<Long, List<UserTeam>> teamIdUserTeamList = userTeamList.stream().collect(Collectors.groupingBy(UserTeam::getTeamId));
+        list.forEach(teamUserVO -> {
+            List<UserTeam> userTeams = teamIdUserTeamList.getOrDefault(teamUserVO.getId(), new ArrayList<>());
+            teamUserVO.setMembers(userTeams.size());
+        });
         return ResultUtils.success(list);
     }
 
@@ -131,8 +162,20 @@ public class TeamController {
         List<Long> teamIds = new ArrayList<>(userTeamList.stream().collect(Collectors.groupingBy(UserTeam::getTeamId)).keySet());
         teamQuery.setTeamIds(teamIds);
         List<TeamUserVO> list = teamService.listTeams(teamQuery, true);
+        teamQuery.setStatus(1);
+        list.addAll(teamService.listTeams(teamQuery, true));
+        teamQuery.setStatus(2);
+        list.addAll(teamService.listTeams(teamQuery, true));
         if (list == null)
             throw new BusinessException(ErrorCode.NULL_ERROR, "查询失败");
+        list.forEach(teamUserVO -> teamUserVO.setHasJoin(true));
+        // 查询加入队伍的用户信息（人数）
+        userTeamList = userTeamService.list(new QueryWrapper<UserTeam>().in("teamId", teamIds));
+        Map<Long, List<UserTeam>> teamIdUserTeamList = userTeamList.stream().collect(Collectors.groupingBy(UserTeam::getTeamId));
+        list.forEach(teamUserVO -> {
+            List<UserTeam> userTeams = teamIdUserTeamList.getOrDefault(teamUserVO.getId(), new ArrayList<>());
+            teamUserVO.setMembers(userTeams.size());
+        });
         return ResultUtils.success(list);
     }
 
