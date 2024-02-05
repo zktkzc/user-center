@@ -322,6 +322,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
                 continue;
             List<String> userTags = gson.fromJson(userTagsStr, new TypeToken<List<String>>() {
             }.getType());
+            if (CollectionUtils.isEmpty(userTags))
+                continue;
             long score = AlgorithmUtils.miniDistanceForTags(loginUserTags, userTags);
             list.add(new Pair<>(user, score));
         }
