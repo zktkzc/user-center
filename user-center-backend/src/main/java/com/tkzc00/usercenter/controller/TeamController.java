@@ -22,6 +22,7 @@ import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -89,6 +90,21 @@ public class TeamController {
         List<TeamUserVO> list = teamService.listTeams(teamQuery, userService.isAdmin(request));
         if (list == null)
             throw new BusinessException(ErrorCode.NULL_ERROR, "查询失败");
+        // 判断当前用户是否已加入队伍
+        List<Long> teamIds = list.stream().map(TeamUserVO::getId).collect(Collectors.toList());
+        QueryWrapper<UserTeam> userTeamQueryWrapper = new QueryWrapper<>();
+        try {
+            User loginUser = userService.getLoginUser(request);
+            userTeamQueryWrapper.eq("userId", loginUser.getId());
+            userTeamQueryWrapper.in("teamId", teamIds);
+            List<UserTeam> userTeamList = userTeamService.list(userTeamQueryWrapper);
+            Set<Long> joinedTeamIdSet = userTeamList.stream().map(UserTeam::getTeamId).collect(Collectors.toSet());
+            list.forEach(teamUserVO -> {
+                if (joinedTeamIdSet.contains(teamUserVO.getId()))
+                    teamUserVO.setHasJoin(true);
+            });
+        } catch (Exception e) {
+        }
         return ResultUtils.success(list);
     }
 

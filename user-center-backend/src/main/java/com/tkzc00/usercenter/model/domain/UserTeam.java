@@ -50,6 +50,12 @@ public class UserTeam implements Serializable {
     @TableLogic
     private Integer isDelete;
 
+    /**
+     * 是否加入该队伍
+     */
+    @TableField(exist = false)
+    private boolean hasJoin = false;
+
     @TableField(exist = false)
     private static final long serialVersionUID = 1L;
 }
