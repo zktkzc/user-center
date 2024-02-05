@@ -13,6 +13,7 @@ import com.tkzc00.usercenter.service.UserService;
 import com.tkzc00.usercenter.utils.AlgorithmUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.math3.util.Pair;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.DigestUtils;
@@ -299,7 +300,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
      */
     @Override
     public List<User> matchUsers(User loginUser, long num) {
-        List<User> userList = list();
+        List<User> userList = list(new QueryWrapper<User>()
+                .isNotNull("tags").select("id", "tags"));
         if (CollectionUtils.isEmpty(userList)) {
             throw new BusinessException(ErrorCode.NULL_ERROR, "用户列表为空");
         }
@@ -307,23 +309,26 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         Gson gson = new Gson();
         List<String> loginUserTags = gson.fromJson(loginUserTagsStr, new TypeToken<List<String>>() {
         }.getType());
-        SortedMap<Integer, Long> indexDistanceMap = new TreeMap<>();
+        List<Pair<User, Long>> list = new ArrayList<>();
         for (int i = 0; i < userList.size(); i++) {
             User user = userList.get(i);
+            // 剔除自己
             if (user.getId().equals(loginUser.getId())) {
-                break;
+                continue;
             }
             String userTagsStr = user.getTags();
+            // 剔除没有标签的用户
             if (StringUtils.isBlank(userTagsStr))
                 continue;
             List<String> userTags = gson.fromJson(userTagsStr, new TypeToken<List<String>>() {
             }.getType());
             long score = AlgorithmUtils.miniDistanceForTags(loginUserTags, userTags);
-            indexDistanceMap.put(i, score);
+            list.add(new Pair<>(user, score));
         }
-        List<Integer> indices = indexDistanceMap.keySet().stream().limit(num).collect(Collectors.toList());
-        return indices.stream()
-                .map(index -> getSafetyUser(userList.get(index)))
-                .collect(Collectors.toList());
+        // 按编辑距离从小到大排序
+        List<Pair<User, Long>> topList = list.stream().sorted((a, b) -> (int) (a.getValue() - b.getValue()))
+                .limit(num).collect(Collectors.toList());
+        return topList.stream().map(Pair::getKey)
+                .map(user -> getSafetyUser(getById(user.getId()))).collect(Collectors.toList());
     }
 }
